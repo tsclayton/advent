@@ -36,11 +36,6 @@ class TuringMachine
   def run()
     for i in 0...@num_steps
       @tape[curr_index] ||= 0
-      # puts "#{@tape[curr_index]}"
-      # puts "#{@rules}"
-      # puts "#{@rules[@curr_state]}"
-      # puts "#{@rules[@curr_state]}"
-      # puts "#{@rules}"
       bit_rule = @rules[@curr_state][@tape[curr_index]]
       @tape[curr_index] = bit_rule.bit_to_write
       @curr_index += bit_rule.slot_increment
