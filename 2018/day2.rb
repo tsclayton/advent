@@ -1,83 +1,81 @@
 #!/usr/bin/env ruby
 
-def get_lines_from_file(filename)
-  lines = []
+def parse_file(filename)
+  strings = []
 
   File.open(filename, "r") do |file|
     file.each_line do |line|
-      lines << line.gsub(/\s+/, ' ').split(' ')
+      strings << line.gsub(/\s+/, '')
     end
   end
 
-  lines
+  strings
 end
 
-def max_min_difference(line)
-  min_num = nil
-  max_num = nil
+def checksum(strings)
+  two_count = 0
+  three_count = 0
 
-  line.each do |word|
-    curr_num = word.to_i
-    min_num = (min_num == nil || curr_num < min_num) ? curr_num : min_num
-    max_num = (max_num == nil || curr_num > max_num) ? curr_num : max_num
+  strings.each do |string|
+    letters = {}
+
+    for i in 0...string.length
+      char = string[i]
+      letters[char] ||= 0
+      letters[char] += 1
+    end
+
+    has_two = has_three = false
+    letters.each do |key, val|
+
+      has_two = true if val == 2
+      has_three = true if val == 3
+    end
+
+    two_count += 1 if has_two
+    three_count += 1 if has_three
   end
 
-  return max_num - min_num
+  two_count * three_count
 end
 
-def divisibility(line)
-  for i in 0...(line.length - 1)
-    num_1 = line[i].to_i
-    for j in (i + 1)...(line.length)
-      num_2 = line[j].to_i
+def get_correct_common_chars(strings)
+  correct_a = ''
+  correct_b = ''
 
-      mod = num_1 > num_2 ? num_1 % num_2 : num_2 % num_1
-      if (mod == 0)
-        return num_1 > num_2 ? num_1 / num_2 : num_2 / num_1
+  for i in 0...(strings.length - 1)
+    string_a = strings[i]
+    for j in (i + 1)...strings.length
+      string_b = strings[j]
+      common_chars = ''
+
+      for k in 0...string_a.length
+        char = string_a[k]
+        common_chars << char if string_a[k] == string_b[k]
       end
+
+      puts "common chars: " + common_chars
+      return common_chars if common_chars.length == (string_a.length - 1)
     end
   end
 
-  return 0
-end
-
-def calculate_checksum(input, line_op)
-  results = []
-
-  input.each do |line|
-    results << line_op.call(line)
-  end
-
-  return results.reduce {|x, y| x + y }
+  ''
 end
 
 def part_1
-  sample_input = [
-    ['5', '1', '9', '5'],
-    ['7', '5', '3'],
-    ['2', '4', '6', '8']
-  ]
-
-  puts("EXAMPLE SOLUTION:")
-  puts(calculate_checksum(sample_input, method(:max_min_difference)))
+  puts("EXAMPLE SOLUTIONS:")
+  puts(checksum(['abcdef', 'bababc', 'abbcde', 'abcccd', 'aabcdd', 'abcdee', 'ababab']))
   puts("INPUT SOLUTION:")
-  file_input = get_lines_from_file("day2_input.txt")
-  puts(calculate_checksum(file_input, method(:max_min_difference)))
+  file_input = parse_file("day2_input.txt")
+  puts(checksum(file_input))
 end
 
-
 def part_2
-  sample_input = [
-    ['5', '9', '2', '8'],
-    ['9', '4', '7', '3'],
-    ['3', '8', '6', '5']
-  ]
-
-  puts("EXAMPLE SOLUTION:")
-  puts calculate_checksum(sample_input, method(:divisibility))
+  puts("EXAMPLE SOLUTIONS:")
+  puts(get_correct_common_chars(['abcde', 'fghij', 'klmno', 'pqrst', 'fguij', 'axcye', 'wvxyz']))
   puts("INPUT SOLUTION:")
-  file_input = get_lines_from_file("day2_input.txt")
-  puts calculate_checksum(file_input, method(:divisibility))
+  file_input = parse_file("day2_input.txt")
+  puts(get_correct_common_chars(file_input))
 end
 
 puts("PART 1 SOLUTIONS:")
