@@ -1,113 +1,122 @@
 #!/usr/bin/env ruby
 
-# Coords should progress like this:
-# [0,0], [1,0], [1,1], [0,1], [-1,1], [-1,0], [-1,-1], [0,-1], [1,-1],
-# [2,-1], [2, 0], [2, 1], [2,2], [1,2], [0,2], [-1,2], [-2,2], [-2,1], [-2,0], [-2,-1], [-2,-2], [-1,-2], [0,-2], [1,-2], [2,-2]
-# [3,-2] ...
+class Claim
+  attr_accessor :id
+  attr_accessor :x
+  attr_accessor :y
+  attr_accessor :w
+  attr_accessor :h
 
-def get_coordinates(square)
-  coords = [0, 0]
-  # index of coords currently being incremented
-  direction = 0
-  incrementor = square_radius = 1
+  def initialize(id, x, y, w, h)
+    @id = id
+    @x = x
+    @y = y
+    @w = w
+    @h = h
+  end
+end
 
-  for i in 1...square
-    coords[direction] += incrementor
+def parse_file(filename)
+  claims = []
 
-    if coords[0] == square_radius && coords[1] == -square_radius
-      square_radius += 1
+  File.open(filename, "r") do |file|
+    file.each_line do |line|
+      subbed_line = line.gsub(/[x,@:]/, ' ').gsub(/#/, '').gsub(/\s+/, ' ')
+      numbers = subbed_line.split(' ').map(&:to_i)
+      claims << Claim.new(numbers[0], numbers[1], numbers[2], numbers[3], numbers[4])
     end
+  end
 
-    if coords[direction].abs == square_radius
-      if direction == 0
-        # x limit reached, go y with the same incrementor
-        direction = 1
-      elsif direction == 1
-        # y limit reached, go x with the opposite incrementor
-        direction = 0
-        incrementor *= -1
+  claims
+end
+
+def gen_fabric_grid
+  fabric = []
+
+  for x in 0...1000
+    fabric[x] = []
+    for y in 0...1000
+      fabric[x][y] = {id: 0, overlaps: 0}
+    end
+  end
+
+  fabric
+end
+
+def apply_claims_to_fabric(claims)
+  fabric = gen_fabric_grid()
+
+  claims.each do |claim|
+    for x in claim.x...(claim.x + claim.w)
+      for y in claim.y...(claim.y + claim.h)
+        fabric[x][y][:id] = claim.id
+        fabric[x][y][:overlaps] += 1
       end
     end
   end
 
-  return coords
+  fabric
 end
 
-def get_distance_from_centre(square)
-  coords = get_coordinates(square)
-  coords[0].abs + coords[1].abs
+def num_overlapping_inches(claims)
+  claimed_fabric = apply_claims_to_fabric(claims)
+
+  overlap_count = 0
+
+  for x in 0...claimed_fabric.length
+    for y in 0...claimed_fabric[x].length
+      overlap_count += 1 if claimed_fabric[x][y][:overlaps] > 1
+    end
+  end
+
+  overlap_count
+end
+
+def id_of_non_overlapping_claim(claims)
+  claimed_fabric = apply_claims_to_fabric(claims)
+
+  claims.each do |claim|
+    overlaps = false
+
+    for x in claim.x...(claim.x + claim.w)
+      for y in claim.y...(claim.y + claim.h)
+        if claimed_fabric[x][y][:overlaps] > 1
+          overlaps = true
+          break
+        end
+      end
+
+      break if overlaps
+    end
+
+    return claim.id if !overlaps
+  end
+
+  for x in 0...claimed_fabric.length
+    for y in 0...claimed_fabric[x].length
+      return claimed_fabric[x][y][:id] if claimed_fabric[x][y][:overlaps] == 1
+    end
+  end
+
+  0
 end
 
 def part_1
-  puts("EXAMPLE SOLUTIONS:")
-  puts(get_distance_from_centre(1))
-  puts(get_distance_from_centre(12))
-  puts(get_distance_from_centre(23))
-  puts(get_distance_from_centre(1024))
+  puts("EXAMPLE SOLUTION:")
+  example_input = [Claim.new(1, 1, 3, 4, 4), Claim.new(2, 3, 1, 4, 4), Claim.new(3, 5, 5, 2, 2)]
+  puts(num_overlapping_inches(example_input))
   puts("INPUT SOLUTION:")
-  puts(get_distance_from_centre(368078))
-end
-
-class Cell
-  neighbours = []
-
-end
-
-# hacks all the way down!
-# Retrospect: Instead of searching through list, could convert coords into string and store cells in hash for constant time lookup
-def get_neighbours(coords, cells)
-  neighbours = []
-  cells.each do |cell|
-    if (coords[0] - cell[:coords][0]).abs <= 1 && (coords[1] - cell[:coords][1]).abs <= 1
-      neighbours << cell
-    end
-  end
-
-  return neighbours
-end
-
-def get_first_cell_with_value_greater_than(max_value)
-  coords = [0, 0]
-  direction = 0
-  incrementor = square_radius = 1
-  cells = [{coords: [0,0], value: 1}]
-
-  while true
-    coords[direction] += incrementor
-
-    if coords[0] == square_radius && coords[1] == -square_radius
-      square_radius += 1
-    end
-
-    if coords[direction].abs == square_radius
-      if direction == 0
-        # x limit reached, go y with the same incrementor
-        direction = 1
-      elsif direction == 1
-        # y limit reached, go x with the opposite incrementor
-        direction = 0
-        incrementor *= -1
-      end
-    end
-
-    neighbours = get_neighbours(coords, cells)
-
-    value = neighbours.inject(0) { |a, b| a + b[:value] }
-    cell = {coords: [coords[0], coords[1]], value: value}
-    cells << cell
-
-    if max_value != nil && value > max_value
-      break
-    end
-  end
-
-  # return value of last cell generated
-  return cells[-1][:value]
+  file_input = parse_file("day3_input.txt")
+  puts(num_overlapping_inches(file_input))
 end
 
 def part_2
+  puts("EXAMPLE SOLUTION:")
+  example_input = [Claim.new(1, 1, 3, 4, 4), Claim.new(2, 3, 1, 4, 4), Claim.new(3, 5, 5, 2, 2)]
+  puts(id_of_non_overlapping_claim(example_input))
   puts("INPUT SOLUTION:")
-  puts(get_first_cell_with_value_greater_than(368078))
+  file_input = parse_file("day3_input.txt")
+  puts(id_of_non_overlapping_claim(file_input))
 end
 
 puts("PART 1 SOLUTIONS:")
