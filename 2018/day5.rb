@@ -1,55 +1,64 @@
 #!/usr/bin/env ruby
 
-def parse_file(filename)
-  numbers = []
-
+def get_polymer_from_file(filename)
   File.open(filename, "r") do |file|
     file.each_line do |line|
-      numbers << line.to_i
+      return line.gsub(/\s/ , '')
+    end
+  end
+end
+
+def reduce_polymer(polymer)
+  i = 0
+
+  while i < (polymer.length - 1)
+    break if polymer[i].nil? || polymer[i+1].nil?
+    if polymer[i] != polymer[i + 1] && polymer[i].downcase == polymer[i + 1].downcase
+      polymer.slice!(i)
+      polymer.slice!(i)
+      i = [i - 2, -1].max
+    end
+
+    i += 1
+  end
+
+  polymer
+end
+
+def reduced_polymer_length(polymer)
+  reduced_polymer = reduce_polymer(polymer)
+  reduced_polymer.length
+end
+
+def shortest_reduced_polymer_length(polymer)
+  alphabet = "abcdefghijklmnopqrstuvwxyz"
+  min_length = nil
+
+  for i in 0...alphabet.length
+    subbed_polymer = polymer.gsub(alphabet[i], '').gsub(alphabet[i].upcase, '')
+    reduced_polymer = reduce_polymer(subbed_polymer)
+    if min_length == nil || reduced_polymer.length < min_length
+      min_length = reduced_polymer.length
     end
   end
 
-  numbers
-end
-
-def plus_one(num)
-  return num + 1
-end
-
-def three_check_incrementor(num)
-  return num >= 3 ? num - 1 : num + 1
-end
-
-def num_steps_in_jump_array(jumps, incrementor)
-  num_steps = 0
-  i = 0
-
-  while true
-    prev = i
-    i = [i + jumps[i], 0].max
-    jumps[prev] = incrementor.call(jumps[prev])
-    num_steps += 1
-    break if (i >= jumps.length)
-  end
-
-  return num_steps
+  min_length
 end
 
 def part_1
   puts("EXAMPLE SOLUTION:")
-  puts(num_steps_in_jump_array([0, 3, 0, 1, -3], method(:plus_one)))
+  puts(reduced_polymer_length("dabAcCaCBAcCcaDA"))
   puts("INPUT SOLUTION:")
-  file_input = parse_file("day5_input.txt")
-  puts(num_steps_in_jump_array(file_input, method(:plus_one)))
+  file_input = get_polymer_from_file("day5_input.txt")
+  puts(reduced_polymer_length(file_input))
 end
-
 
 def part_2
   puts("EXAMPLE SOLUTION:")
-  puts(num_steps_in_jump_array([0, 3, 0, 1, -3], method(:three_check_incrementor)))
+  puts(shortest_reduced_polymer_length("dabAcCaCBAcCcaDA"))
   puts("INPUT SOLUTION:")
-  file_input = parse_file("day5_input.txt")
-  puts(num_steps_in_jump_array(file_input, method(:three_check_incrementor)))
+  file_input = get_polymer_from_file("day5_input.txt")
+  puts(shortest_reduced_polymer_length(file_input))
 end
 
 puts("PART 1 SOLUTIONS:")
