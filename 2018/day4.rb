@@ -1,80 +1,144 @@
 #!/usr/bin/env ruby
 
-def get_lines_from_file(filename)
-  lines = []
+class Log
+  attr_accessor :date
+  attr_accessor :text
+end
+
+class GuardLog
+  attr_accessor :guard_id
+  attr_accessor :activity
+  attr_accessor :date
+
+  def initialize(guard_id, activity, date)
+    @guard_id = guard_id
+    @activity = activity
+    @date = date
+  end
+end
+
+def guard_logs_from_file(filename)
+  guard_logs = []
 
   File.open(filename, "r") do |file|
     file.each_line do |line|
-      lines << line.gsub(/\s+/, ' ').split(' ')
+      split_line = line.split('] ')
+      date_values = split_line[0].gsub(/\[/, '').gsub(/[-\s:]/, ',').split(',')
+      date = Time.new(date_values[0], date_values[1], date_values[2], date_values[3], date_values[4])
+
+      activity_line = split_line[1]
+      # will have to fill in most of these ids later
+      guard_id = 0
+      activity = ''
+      if activity_line.match(/Guard/) != nil
+        guard_id = activity_line.match(/[0-9]+/).to_s.to_i
+        activity = 'begin'
+      elsif activity_line.match(/falls/) != nil
+        activity = 'asleep'
+      elsif activity_line.match(/wakes/) != nil
+        activity = 'awake'
+      end
+
+      guard_logs << GuardLog.new(guard_id, activity, date)
     end
   end
 
-  lines
+  guard_logs
 end
 
-def no_duplicate_words(line)
-  word_map = {}
-
-  line.each do |word|
-    if word_map[word] == true
-      return false
+# sort by date and fill in missing guard ids
+def sort_and_fill_guard_logs(guard_logs)
+  guard_logs.sort_by!(&:date)
+  current_guard_id = 0
+  guard_logs.each do |guard_log|
+    if guard_log.activity == 'begin'
+      current_guard_id = guard_log.guard_id
+    else
+      guard_log.guard_id = current_guard_id
     end
-
-    word_map[word] = true
   end
-
-  return true
 end
 
-def no_anagrams(line)
-  word_map = {}
+# {guard_id: => {minute => num_days_asleep}}}
+def get_sleep_time_table(guard_logs)
+  time_table = {}
 
-  line.each do |word|
-    # Retrospect: much more efficient to compare alphabetically sorted strings
-    permutations = word.split('').permutation.map(&:join)
-    permutations.each do |perm|
-      if word_map[perm] == true
-        return false
+  sleep_minute = 0
+  guard_logs.each do |guard_log|
+    time_table[guard_log.guard_id] ||= {}
+
+    if guard_log.activity == "asleep"
+      sleep_minute = guard_log.date.min
+    elsif guard_log.activity == "awake"
+      for min in sleep_minute...(guard_log.date.min)
+        time_table[guard_log.guard_id][min] ||= 0
+        time_table[guard_log.guard_id][min] += 1
       end
     end
-
-    word_map[word] = true
   end
 
-  return true
+  time_table
 end
 
-def num_valid_passphrases(input, validator)
-  num_valid = 0
+def get_sleepiest_guard_product(guard_logs)
+  sort_and_fill_guard_logs(guard_logs)
+  time_table = get_sleep_time_table(guard_logs)
 
-  input.each do |line|
-    num_valid += 1 if validator.call(line)
+  sleepiest_guard_id = 0
+  sleepiest_minute = 0
+  max_minutes_asleep = 0
+
+  time_table.each do |guard_id, sleep_mins|
+    total_minutes_asleep = sleep_mins.values.reduce(0, :+)
+
+    if total_minutes_asleep > max_minutes_asleep
+      max_minutes_asleep = total_minutes_asleep
+      sleepiest_guard_id = guard_id
+      sleepiest_minute = sleep_mins.key(sleep_mins.values.max)
+    end
   end
 
-  return num_valid
+  sleepiest_guard_id * sleepiest_minute
+end
+
+def get_same_minute_sleeper_product(guard_logs)
+  sort_and_fill_guard_logs(guard_logs)
+  time_table = get_sleep_time_table(guard_logs)
+
+  # wowzers, these variable names are garbage
+  frequent_sleeper_guard_id = 0
+  max_days_slept_on_minute = 0
+  sleepiest_minute = 0
+
+  time_table.each do |guard_id, sleep_mins|
+    largest_day_count = (sleep_mins.values.max || 0)
+
+    if largest_day_count > max_days_slept_on_minute
+      max_days_slept_on_minute = largest_day_count
+      frequent_sleeper_guard_id = guard_id
+      sleepiest_minute = sleep_mins.key(max_days_slept_on_minute)
+    end
+  end
+
+  frequent_sleeper_guard_id * sleepiest_minute
 end
 
 def part_1
   puts("EXAMPLE SOLUTIONS:")
-  puts(num_valid_passphrases([['aa', 'bb', 'cc', 'dd', 'ee']], method(:no_duplicate_words)))
-  puts(num_valid_passphrases([['aa', 'bb', 'cc', 'dd', 'aa']], method(:no_duplicate_words)))
-  puts(num_valid_passphrases([['aa', 'bb', 'cc', 'dd', 'aaa']], method(:no_duplicate_words)))
+  example_input = guard_logs_from_file('day_4_example.txt')
+  puts(get_sleepiest_guard_product(example_input))
   puts("INPUT SOLUTION:")
-  file_input = get_lines_from_file("day4_input.txt")
-  puts(num_valid_passphrases(file_input, method(:no_duplicate_words)))
+  file_input = guard_logs_from_file("day4_input.txt")
+  puts(get_sleepiest_guard_product(file_input))
 end
-
 
 def part_2
   puts("EXAMPLE SOLUTIONS:")
-  puts(num_valid_passphrases([['abcde', 'fghij']], method(:no_anagrams)))
-  puts(num_valid_passphrases([['abcde', 'xyz', 'ecdab']], method(:no_anagrams)))
-  puts(num_valid_passphrases([['a', 'ab', 'abc', 'abd', 'abf', 'abj']], method(:no_anagrams)))
-  puts(num_valid_passphrases([['iiii', 'oiii', 'ooii', 'oooi', 'oooo']], method(:no_anagrams)))
-  puts(num_valid_passphrases([['oiii', 'ioii', 'iioi', 'iiio']], method(:no_anagrams)))
+  example_input = guard_logs_from_file('day_4_example.txt')
+  puts(get_same_minute_sleeper_product(example_input))
   puts("INPUT SOLUTION:")
-  file_input = get_lines_from_file("day4_input.txt")
-  puts(num_valid_passphrases(file_input, method(:no_anagrams)))
+  file_input = guard_logs_from_file("day4_input.txt")
+  puts(get_same_minute_sleeper_product(file_input))
 end
 
 puts("PART 1 SOLUTIONS:")
