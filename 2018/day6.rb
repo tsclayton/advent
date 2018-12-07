@@ -1,104 +1,133 @@
 #!/usr/bin/env ruby
 
-def parse_file(filename)
-  lines = []
+class Point
+  attr_accessor :x
+  attr_accessor :y
 
+  def initialize(x, y)
+    @x = x
+    @y = y
+  end
+end
+
+def get_points_from_file(filename)
+  points = []
+
+  point_id = 0
   File.open(filename, "r") do |file|
     file.each_line do |line|
-      lines << line.gsub(/\s+/, ' ').split(' ').map(&:to_i)
+      coords = line.gsub(/\s+/, '').split(',').map(&:to_i)
+      points << Point.new(coords[0], coords[1])
+      point_id += 1
     end
   end
 
-  return lines[0]
+  points
 end
 
-def num_cycles_to_infinite_loop(banks)
-  num_cycles = 0
-  memory_states = {}
-
-  while true
-    state_key = banks.join(",")
-    break if memory_states[state_key] != nil
-
-    memory_states[state_key] = num_cycles
-
-    max_blocks = 0
-    block_index = 0
-
-    for i in 0...banks.length
-      if banks[i] > max_blocks
-        max_blocks = banks[i]
-        block_index = i
-      end
-    end
-
-    blocks_to_distribute = max_blocks
-    banks[block_index] = 0
-
-    while blocks_to_distribute > 0
-      block_index = (block_index + 1) % banks.length
-      banks[block_index] += 1
-      blocks_to_distribute -= 1
-    end
-
-    num_cycles += 1
-  end
-
-  return num_cycles
+def distance(p1, p2)
+  (p1.x - p2.x).abs + (p1.y - p2.y).abs
 end
 
-# same as above, just return a different thing
-def length_of_infinite_loop(banks)
-  num_cycles = 0
-  memory_states = {}
+def get_bounding_box(points)
+  min_x = min_y = max_x = max_y = nil
 
-  while true
-    state_key = banks.join(",")
-    if memory_states[state_key] != nil
-      return num_cycles - memory_states[state_key]
-    end
-
-    memory_states[state_key] = num_cycles
-
-    max_blocks = 0
-    block_index = 0
-
-    for i in 0...banks.length
-      if banks[i] > max_blocks
-        max_blocks = banks[i]
-        block_index = i
-      end
-    end
-
-    blocks_to_distribute = max_blocks
-    banks[block_index] = 0
-
-    while blocks_to_distribute > 0
-      block_index = (block_index + 1) % banks.length
-      banks[block_index] += 1
-      blocks_to_distribute -= 1
-    end
-
-    num_cycles += 1
+  points.each do |point|
+    min_x = point.x if min_x.nil? || point.x < min_x
+    min_y = point.y if min_y.nil? || point.y < min_y
+    max_x = point.x if max_x.nil? || point.x > max_x
+    max_y = point.y if max_y.nil? || point.y > max_y
   end
 
-  return num_cycles
+  [Point.new(min_x, min_y), Point.new(max_x, max_y)]
+end
+
+def get_largest_finite_area(points)
+  bounds = get_bounding_box(points)
+  min_bound = bounds[0]
+  max_bound = bounds[1]
+
+  # Using a hash because I don't feel like normalizing the coordinates.
+  grid = {}
+
+  for x in min_bound.x..max_bound.x
+    grid[x] ||= {}
+
+    for y in min_bound.y..max_bound.y
+      grid[x][y] = nil
+      is_tie = false
+      min_distance = nil
+      min_index = nil
+
+      # 1 ... 2 ... 3 loops!
+      points.each_with_index do |point, i|
+        dist = distance(point, Point.new(x, y))
+        if min_distance.nil? || dist < min_distance
+          min_distance = dist
+          min_index = i
+          is_tie = false
+        elsif min_distance == dist
+          is_tie = true
+        end
+      end
+
+      # -1 represents two points being equidistant
+      grid[x][y] = (is_tie ? -1 : min_index)
+    end
+  end
+
+  area_sizes = {}
+  grid.values.each do |cols|
+    cols.values.each do |cell|
+      # don't include the in-betweeners
+      if cell != -1
+        area_sizes[cell] ||= 0
+        area_sizes[cell] += 1
+      end
+    end
+  end
+
+  area_sizes.values.max
+end
+
+def get_safe_zone_area(points, min_distance_sum)
+  bounds = get_bounding_box(points)
+  min_bound = bounds[0]
+  max_bound = bounds[1]
+
+  safe_zone_area = 0
+
+  for x in min_bound.x..max_bound.x
+    for y in min_bound.y..max_bound.y
+      distance_sum = 0
+
+      points.each do |point|
+        distance_sum += distance(point, Point.new(x, y))
+      end
+
+      safe_zone_area += 1 if distance_sum < min_distance_sum
+    end
+  end
+
+  safe_zone_area
 end
 
 def part_1
   puts("EXAMPLE SOLUTION:")
-  puts(num_cycles_to_infinite_loop([0, 2, 7, 0]))
+  example_input = get_points_from_file("day6_example.txt")
+  puts(get_largest_finite_area(example_input))
   puts("INPUT SOLUTION:")
-  file_input = parse_file("day6_input.txt")
-  puts(num_cycles_to_infinite_loop(file_input))
+  file_input = get_points_from_file("day6_input.txt")
+  puts(get_largest_finite_area(file_input))
 end
 
 def part_2
   puts("EXAMPLE SOLUTION:")
-  puts(length_of_infinite_loop([0, 2, 7, 0]))
+  example_input = get_points_from_file("day6_example.txt")
+  puts(get_safe_zone_area(example_input, 32))
   puts("INPUT SOLUTION:")
-  file_input = parse_file("day6_input.txt")
-  puts(length_of_infinite_loop(file_input))
+  file_input = get_points_from_file("day6_input.txt")
+  puts(get_safe_zone_area(file_input, 10000))
 end
 
 puts("PART 1 SOLUTIONS:")
