@@ -1,93 +1,143 @@
 #!/usr/bin/env ruby
 
-def parse_file(filename)
-  nodes = {}
+def get_instructions_from_file(filename)
+  instructions = {}
 
   File.open(filename, "r") do |file|
     file.each_line do |line|
-      line.gsub!(/\s+/, ' ')
-      line.gsub!(/[\(\)\-\>,]/, '')
-      parsed_line = line.split(' ')
+      split_line = line.split(' ')
+      prerequisite = split_line[1]
+      step = split_line[7]
 
-      name = parsed_line.shift
-      weight = parsed_line.shift.to_i
-      children = parsed_line
-      nodes[name] = {name: name, weight: weight, children: children}
+      instructions[step] ||= []
+      instructions[prerequisite] ||= []
+      instructions[step] << prerequisite
     end
   end
 
-  return nodes
+  instructions
 end
 
-def get_bottom_node(nodes)
-  child_nodes = nodes.values.inject([]) {|children, node| children + node[:children] }.uniq
-  return [nodes.keys - child_nodes][0][0]
-end
+def get_step_order(instructions)
+  sorted_steps = instructions.keys.sort
+  step_order = ''
 
-def calculate_weight(node_name, node_map)
-  node = node_map[node_name]
-  return node[:weight] + node[:children].inject(0) {|sum, child_name| sum + calculate_weight(child_name, node_map)}
-end
+  while !instructions.empty?
+    sorted_steps.each do |step|
+      if !instructions[step].nil? && instructions[step].empty?
+        instructions.delete(step)
+        step_order << step
 
-def get_proper_weight(node_name, node_map)
-  node = node_map[node_name]
-  weights = node[:children].map {|child_name| calculate_weight(child_name, node_map)}
-  puts "weights: #{weights}"
+        instructions.values.each do |prerequisites|
+          prerequisites.delete(step)
+        end
 
-  # weights are the same, sub-tree is balanced
-  return -1 if weights.uniq.length == 1
-
-  differing_weight = 0
-  matching_weight = weights[0]
-  mismatched_node = ''
-
-  for i in 0...weights.length
-    if weights[i] != matching_weight
-      if i > 2 || weights[1] != weights[2]
-        mismatched_node = node[:children][i]
-        differing_weight = weights[i]
-        break
-      else # first is the odd one out
-        matching_weight = weights[1]
-        mismatched_node = node[:children][0]
-        differing_weight = weights[0]
         break
       end
     end
   end
 
-  correct_sub_tree_weight = get_proper_weight(mismatched_node, node_map)
-  if (correct_sub_tree_weight == -1)
-    difference = matching_weight - differing_weight
-    puts "difference: #{difference}"
-    puts "matching_weight: #{matching_weight}"
-    puts "differing_weight: #{differing_weight}"
-    puts "node_weight: #{node_map[mismatched_node][:weight]}"
-    return node_map[mismatched_node][:weight] + difference
-    # child tree is balanced, problem must be here
+  step_order
+end
+
+class Worker
+  attr_accessor :current_task
+  attr_accessor :seconds_to_complete
+
+  def initialize()
+    @current_task = nil
+    @seconds_to_complete = 0
   end
 
-  # upper tree imbalanced, so we must be passing down the proper sub tree weight
-  return correct_sub_tree_weight
+  def is_available()
+    @seconds_to_complete == 0
+  end
+
+  def tick()
+    @seconds_to_complete -= 1
+  end
+end
+
+# Probably should've broken this up into smaller functions, but ¯\_(ツ)_/¯
+def get_completion_time(instructions, num_workers)
+  workers = []
+  sorted_steps = instructions.keys.sort
+
+  for i in 0...num_workers
+    workers << Worker.new()
+  end
+
+  total_seconds = 0
+
+  while true
+    is_worker_available = false
+    all_workers_free = true
+
+    workers.each_with_index do |worker, i|
+      if worker.is_available()
+        is_worker_available = true
+      else
+        worker.tick()
+        if worker.is_available()
+          instructions.values.each do |prerequisites|
+            prerequisites.delete(worker.current_task)
+          end
+
+          is_worker_available = true
+        else
+          all_workers_free = false
+        end
+      end
+    end
+
+    # Also check that no workers have a current task
+    break if instructions.empty? && all_workers_free
+
+    if is_worker_available
+      sorted_steps.each do |step|
+        if !instructions[step].nil? && instructions[step].empty?
+          available_worker = nil
+
+          workers.each do |worker|
+            if worker.is_available()
+              available_worker = worker
+              break
+            end
+          end
+
+          if !available_worker.nil?
+            available_worker.current_task = step
+            available_worker.seconds_to_complete = (step.ord - 64) + 60
+            # Remove it from the list so another worker doesn't start working on it
+            instructions.delete(step)
+          end
+        end
+      end
+    end
+
+    total_seconds += 1
+  end
+
+  total_seconds
 end
 
 def part_1
   puts("EXAMPLE SOLUTIONS:")
-  example_input = parse_file("day7_example.txt")
-  puts(get_bottom_node(example_input))
+  example_input = get_instructions_from_file("day7_example.txt")
+  puts(get_step_order(example_input))
   puts("INPUT SOLUTION:")
-  file_input = parse_file("day7_input.txt")
-  puts(get_bottom_node(file_input))
+  file_input = get_instructions_from_file("day7_input.txt")
+  puts(get_step_order(file_input))
 end
 
 
 def part_2
   puts("EXAMPLE SOLUTIONS:")
-  example_input = parse_file("day7_example.txt")
-  puts(get_proper_weight(get_bottom_node(example_input), example_input))
+  example_input = get_instructions_from_file("day7_example.txt")
+  puts(get_completion_time(example_input, 2))
   puts("INPUT SOLUTION:")
-  file_input = parse_file("day7_input.txt")
-  puts(get_proper_weight(get_bottom_node(file_input), file_input))
+  file_input = get_instructions_from_file("day7_input.txt")
+  puts(get_completion_time(file_input, 5))
 end
 
 puts("PART 1 SOLUTIONS:")

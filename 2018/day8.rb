@@ -1,94 +1,86 @@
 #!/usr/bin/env ruby
 
-def parse_file(filename)
-  instructions = []
+class Node
+  attr_accessor :children
+  attr_accessor :metadata
 
+  def initialize()
+    @children = []
+    @metadata = []
+  end
+end
+
+def get_numbers_from_file(filename)
   File.open(filename, "r") do |file|
     file.each_line do |line|
-      parsed_line = line.gsub(/\s+/, ' ').split(' ')
-
-      register = parsed_line.shift
-      operation = parsed_line.shift
-      value = parsed_line.shift.to_i
-
-      condition = {}
-      # shift useless "if"
-      parsed_line.shift
-      condition[:register] = parsed_line.shift
-      condition[:predicate] = parsed_line.shift
-      condition[:value] = parsed_line.shift.to_i
-
-      instructions << {register: register, operation: operation, value: value, condition: condition}
+      return line.split(' ').map(&:to_i)
     end
   end
-
-  instructions
 end
 
-def evaluate_condition(condition, registers)
-  # puts condition[:predicate]
-  case condition[:predicate]
-    when '<'
-      registers[condition[:register]] < condition[:value]
-    when '<='
-      registers[condition[:register]] <= condition[:value]
-    when '=='
-      registers[condition[:register]] == condition[:value]
-    when '!='
-      registers[condition[:register]] != condition[:value]
-    when '>='
-      registers[condition[:register]] >= condition[:value]
-    when '>'
-      registers[condition[:register]] > condition[:value]
-    else
-      false
-    end
-end
+def construct_tree(numbers)
+  return nil if numbers.empty? || numbers.length == 1
 
-def run_instructions(instructions, registers)
-  max_value = 0
+  num_children = numbers.shift()
+  num_metadata = numbers.shift()
 
-  instructions.each do |instruction|
-    # initialize registers if we have to
-    registers[instruction[:register]] ||= 0
-    registers[instruction[:condition][:register]] ||= 0
+  node = Node.new()
 
-    if evaluate_condition(instruction[:condition], registers)
-      if instruction[:operation] == 'inc'
-        registers[instruction[:register]] += instruction[:value]
-      elsif instruction[:operation] == 'dec'
-        registers[instruction[:register]] -= instruction[:value]
-      end
-
-      max_value = [max_value, registers[instruction[:register]]].max
-    end
+  for i in 0...num_children
+    node.children << construct_tree(numbers)
   end
 
-  max_value
+  node.children.compact!
+
+  for i in 0...num_metadata
+    node.metadata << numbers.shift()
+  end
+
+  node
 end
 
-def largest_register_value(instructions)
-  registers = {}
-  run_instructions(instructions, registers)
-  registers.max_by {|register, value| value}[1]
+def get_metadata_sum(tree)
+  return 0 if tree.nil?
+
+  child_metadata_sum = 0
+
+  tree.children.each do |child|
+    child_metadata_sum += get_metadata_sum(child)
+  end
+
+  child_metadata_sum + tree.metadata.reduce(0, :+)
+end
+
+def get_tree_value(tree)
+  return 0 if tree.nil?
+
+  return tree.metadata.reduce(0, :+) if tree.children.length == 0
+
+  total_children_value = 0
+
+  tree.metadata.each do |metadatum|
+    next if metadatum <= 0 || metadatum > tree.children.length
+    puts "getting child value"
+    total_children_value += get_tree_value(tree.children[metadatum - 1])
+  end
+
+  total_children_value
 end
 
 def part_1
   puts("EXAMPLE SOLUTION:")
-  example_input = parse_file("day8_example.txt")
-  puts(largest_register_value(example_input))
+  puts(get_metadata_sum(construct_tree([2, 3, 0, 3, 10, 11, 12, 1, 1, 0, 1, 99, 2, 1, 1, 2])))
   puts("INPUT SOLUTION:")
-  file_input = parse_file("day8_input.txt")
-  puts(largest_register_value(file_input))
+  file_input = get_numbers_from_file("day8_input.txt")
+  puts(get_metadata_sum(construct_tree(file_input)))
 end
 
 def part_2
   puts("EXAMPLE SOLUTION:")
-  example_input = parse_file("day8_example.txt")
-  puts(run_instructions(example_input, {}))
+  puts(get_tree_value(construct_tree([2, 3, 0, 3, 10, 11, 12, 1, 1, 0, 1, 99, 2, 1, 1, 2])))
   puts("INPUT SOLUTION:")
-  file_input = parse_file("day8_input.txt")
-  puts(run_instructions(file_input, {}))
+  file_input = get_numbers_from_file("day8_input.txt")
+  puts(get_tree_value(construct_tree(file_input)))
 end
 
 puts("PART 1 SOLUTIONS:")
