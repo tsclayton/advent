@@ -60,7 +60,6 @@ def get_tree_value(tree)
 
   tree.metadata.each do |metadatum|
     next if metadatum <= 0 || metadatum > tree.children.length
-    puts "getting child value"
     total_children_value += get_tree_value(tree.children[metadatum - 1])
   end
 

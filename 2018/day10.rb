@@ -1,94 +1,91 @@
 #!/usr/bin/env ruby
 
-def parse_file(filename)
+class Light
+  # I'll just represent these as arrays of 2 ints
+  attr_accessor :position
+  attr_accessor :velocity
+
+  def initialize(position, velocity)
+    @position = position
+    @velocity = velocity
+  end
+end
+
+def get_lights_from_file(filename)
+  lights = []
+
   File.open(filename, "r") do |file|
     file.each_line do |line|
-      return line.split(',').map(&:to_i)
-    end
-  end
-end
-
-def parse_file_as_ascii(filename)
-  File.open(filename, "r") do |file|
-    file.each_line do |line|
-      line.gsub!(/\s+/,'')
-      return line.each_char.map(&:ord)
-    end
-  end
-end
-
-def generate_sparse_hash(numbers, lengths, iterations)
-  skip_size = 0
-  curr_index = 0
-
-  (1..iterations).each do |iteration|
-    lengths.each do |length|
-      start_index = curr_index
-      end_index = curr_index + length - 1
-
-      while start_index < end_index
-        # swap numbers
-        temp = numbers[start_index % numbers.length]
-        numbers[start_index % numbers.length] = numbers[end_index % numbers.length]
-        numbers[end_index % numbers.length] = temp
-
-        start_index += 1
-        end_index -= 1
-      end
-
-      curr_index = (curr_index + length + skip_size) % numbers.length
-
-      skip_size += 1
+      numbers = line.scan(/-*[0-9]+/).map(&:to_i)
+      lights << Light.new([numbers[0], numbers[1]], [numbers[2], numbers[3]])
     end
   end
 
-  numbers
+  lights
 end
 
-def generate_dense_hash(sparse_hash)
-  sparse_hash.each_slice(16).map {|partition| partition.reduce(&:^)}
+def print_secret_message(lights)
+  seconds = 0
+  min_distance_sum = nil
+
+  while true
+    seconds += 1
+
+    lights.each do |light|
+      light.position[0] += light.velocity[0]
+      light.position[1] += light.velocity[1]
+    end
+
+    distance_sum = 0
+    for i in 0...(lights.length - 1)
+      distance_sum += (lights[i].position[0] - lights[i + 1].position[0]).abs + (lights[i].position[1] - lights[i + 1].position[1]).abs
+    end
+
+    # Keep going until the points are closest together
+    break if !min_distance_sum.nil? && distance_sum > min_distance_sum
+
+    min_distance_sum = distance_sum
+  end
+
+  min_x = min_y = max_x = max_y = nil
+
+  lights.each do |light|
+    light.position[0] -= light.velocity[0]
+    light.position[1] -= light.velocity[1]
+
+    min_x = light.position[0] if min_x.nil? || light.position[0] < min_x
+    min_y = light.position[1] if min_y.nil? || light.position[1] < min_y
+    max_x = light.position[0] if max_x.nil? || light.position[0] > max_x
+    max_y = light.position[1] if max_y.nil? || light.position[1] > max_y
+  end
+
+  # grid = (y, x) for easier printing
+  grid = []
+
+  for i in 0...((max_y - min_y).abs + 1)
+    grid[i] = []
+  end
+
+  lights.each do |light|
+    grid[light.position[1] - min_y][light.position[0] - min_x] = true
+  end
+
+  grid.each do |row|
+    row_string = row.map { |x| x.nil? ? '.' : '#'}.join('')
+    puts row_string
+  end
+
+  seconds
 end
 
-def convert_to_hex_string(dense_hash)
-  dense_hash.map do |part|
-    hex_part = part.to_s(16)
-    # append leading 0 if necessary
-    hex_part.length == 1 ? '0' + hex_part : hex_part
-  end.join('')
-end
-
-def multiply_first_two(numbers, lengths)
-  generate_sparse_hash(numbers, lengths, 1)
-  numbers[0] * numbers[1]
-end
-
-def knot_hash(lengths)
-  numbers = (0..255).to_a
-  generate_sparse_hash(numbers, lengths + [17, 31, 73, 47, 23], 64)
-  dense_hash = generate_dense_hash(numbers)
-  convert_to_hex_string(dense_hash)
-end
-
-def part_1
+def parts_1_and_2
   puts("EXAMPLE SOLUTION:")
-  puts(multiply_first_two((0..4).to_a, [3, 4, 1, 5]))
+  example_input = get_lights_from_file("day10_example.txt")
+  puts(print_secret_message(example_input))
   puts("INPUT SOLUTION:")
-  file_input = parse_file("day10_input.txt")
-  puts(multiply_first_two((0..255).to_a, file_input))
+  file_input = get_lights_from_file("day10_input.txt")
+  puts(print_secret_message(file_input))
 end
 
-def part_2
-  puts("EXAMPLE SOLUTIONS:")
-  puts(knot_hash(''.each_char.map(&:ord)))
-  puts(knot_hash('AoC 2017'.each_char.map(&:ord)))
-  puts(knot_hash('1,2,3'.each_char.map(&:ord)))
-  puts(knot_hash('1,2,4'.each_char.map(&:ord)))
-  puts("INPUT SOLUTION:")
-  file_input = parse_file_as_ascii("day10_input.txt")
-  puts(knot_hash(file_input))
-end
-
-puts("PART 1 SOLUTIONS:")
-part_1()
-puts("PART 2 SOLUTIONS:")
-part_2()
+puts("SOLUTIONS:")
+parts_1_and_2()
