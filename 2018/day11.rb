@@ -1,111 +1,127 @@
 #!/usr/bin/env ruby
 
-def parse_file(filename)
-  File.open(filename, "r") do |file|
-    file.each_line do |line|
-      return line.gsub(/\s+/, '').split(',')
+def initialize_power_grid(serial_number)
+  grid = []
+
+  for x in 0...300
+    grid[x] ||= []
+
+    for y in 0...300
+      grid[x][y] = get_power_level(x, y, serial_number)
     end
   end
+
+  grid
 end
 
-def get_direction_vector(direction)
-  case direction
-  when 'n'
-    [0.0, 1.0]
-  when 's'
-    [0.0, -1.0]
-  when 'ne'
-    [1.0, 0.5]
-  when 'nw'
-    [-1.0, 0.5]
-  when 'se'
-    [1.0, -0.5]
-  when 'sw'
-    [-1.0, -0.5]
-  else
-    [0.0, 0.0]
+def get_power_level(x, y, serial_number)
+  rack_id = x + 10
+
+  power_level = (rack_id * y + serial_number) * rack_id
+  power_level = (power_level / 100) % 10
+
+  power_level - 5
+end
+
+def get_largest_power_square(power_grid)
+  largest_power_coords = [0, 0]
+  largest_power = -1000
+
+  for x in 0...298
+    for y in 0...298
+      power_sum = power_grid[x][y] + power_grid[x + 1][y] + power_grid[x + 2][y] +
+                    power_grid[x][y + 1] + power_grid[x + 1][y + 1] + power_grid[x + 2][y + 1] +
+                    power_grid[x][y + 2] + power_grid[x + 1][y + 2] + power_grid[x + 2][y + 2]
+
+      if power_sum > largest_power
+        largest_power_coords = [x, y]
+        largest_power = power_sum
+      end
+    end
   end
+
+  largest_power_coords.join(',')
 end
 
-def add_direction(hex_coords, direction)
-  direction_vector = get_direction_vector(direction)
-  hex_coords[0] += direction_vector[0]
-  hex_coords[1] += direction_vector[1]
-end
+def get_largest_variable_power_square(power_grid, square_size)
+  largest_power_coords = [0, 0]
+  largest_power = -1000
 
-def get_shortest_distance(hex_coords)
-  distance = 0
-  curr_coords = hex_coords.clone
+  for x in 0...(298 - square_size + 1)
+    for y in 0...(298 - square_size + 1)
+      power_sum = 0
 
-  while true
-    if curr_coords[0] == 0.0
-      # remaining distance is purely vertical
-      distance += curr_coords[1].abs
-      break
-    elsif (curr_coords[0] / curr_coords[1]).abs == 2
-      # remaining distance is purely diagonal
-      distance += curr_coords[0].abs
-      break
-    else
-      if curr_coords[0] < 0 && curr_coords[1] <= 0
-        add_direction(curr_coords, 'ne')
-      elsif curr_coords[0] < 0 && curr_coords[1] > 0
-        add_direction(curr_coords, 'se')
-      elsif curr_coords[0] > 0 && curr_coords[1] <= 0
-        add_direction(curr_coords, 'nw')
-      elsif curr_coords[0] > 0 && curr_coords[1] > 0
-        add_direction(curr_coords, 'sw')
+      for ix in 0...square_size
+        for iy in 0...square_size
+          power_sum += power_grid[x + ix][y + iy]
+        end
       end
 
-      distance += 1
+      if power_sum > largest_power
+        largest_power_coords = [x, y]
+        largest_power = power_sum
+      end
     end
   end
 
-  distance
+  {coords: largest_power_coords, power: largest_power}
 end
 
-def shortest_distance_at_end_point(directions)
-  hex_coords = [0, 0]
+def shitty_largest_power_square_of_any_size(power_grid)
+  largest_power = -1000
+  largest_power_coords = []
+  largest_power_size = 0
 
-  directions.each do |direction|
-    add_direction(hex_coords, direction)
+  # for size in 1..300
+  max_bad_streak = 3
+  current_streak = 0
+  for size in 1..300
+  # for size in 13..100
+    results = get_largest_variable_power_square(power_grid, size)
+
+    if results[:power] >= largest_power
+      current_streak = 0
+      largest_power = results[:power]
+      largest_power_coords = results[:coords]
+      largest_power_size = size
+    else
+      # if the max power is negative, we're probably not gonna make it any bigger by increasing the size
+      break if results[:power] < 0
+    end
   end
 
-  get_shortest_distance(hex_coords)
-end
-
-def max_distance_in_journey(directions)
-  hex_coords = [0, 0]
-  max_distance = 0
-
-  directions.each do |direction|
-    add_direction(hex_coords, direction)
-    max_distance = [max_distance, get_shortest_distance(hex_coords)].max
-  end
-
-  max_distance
+  "#{largest_power_coords[0]},#{largest_power_coords[1]},#{largest_power_size}"
 end
 
 def part_1
   puts("EXAMPLE SOLUTIONS:")
-  puts(shortest_distance_at_end_point(['ne', 'ne', 'ne']))
-  puts(shortest_distance_at_end_point(['ne', 'ne', 'sw', 'sw']))
-  puts(shortest_distance_at_end_point(['ne', 'ne', 's', 's']))
-  puts(shortest_distance_at_end_point(['se', 'sw', 'se', 'sw', 'sw']))
+  puts(get_largest_power_square(initialize_power_grid(18)))
+  puts(get_largest_power_square(initialize_power_grid(42)))
+
   puts("INPUT SOLUTION:")
-  file_input = parse_file("day11_input.txt")
-  puts(shortest_distance_at_end_point(file_input))
+  puts(get_largest_power_square(initialize_power_grid(8199)))
 end
+
+# You discover a dial on the side of the device; it seems to let you select a square of any size, not just 3x3. Sizes from 1x1 to 300x300 are supported.
+
+# Realizing this, you now must find the square of any size with the largest total power. Identify this square by including its size as a third parameter after the top-left coordinate: a 9x9 square with a top-left corner of 3,5 is identified as 3,5,9.
+
+# For example:
+
+# For grid serial number 18, the largest total square (with a total power of 113) is 16x16 and has a top-left corner of 90,269, so its identifier is 90,269,16.
+# For grid serial number 42, the largest total square (with a total power of 119) is 12x12 and has a top-left corner of 232,251, so its identifier is 232,251,12.
+# What is the X,Y,size identifier of the square with the largest total power?
 
 def part_2
   puts("EXAMPLE SOLUTIONS:")
-  puts(max_distance_in_journey(['ne', 'ne', 'ne']))
-  puts(max_distance_in_journey(['ne', 'ne', 'sw', 'sw']))
-  puts(max_distance_in_journey(['ne', 'ne', 's', 's']))
-  puts(max_distance_in_journey(['se', 'sw', 'se', 'sw', 'sw']))
+  # puts(shitty_largest_power_square_of_any_size(initialize_power_grid(18)))
+  # 90,269,16
+  # puts(shitty_largest_power_square_of_any_size(initialize_power_grid(42)))
+  # 232,251,12
   puts("INPUT SOLUTION:")
-  file_input = parse_file("day11_input.txt")
-  puts(max_distance_in_journey(file_input))
+  puts(shitty_largest_power_square_of_any_size(initialize_power_grid(8199)))
+  # 235,271,13
+  # size: 18, power: 119
 end
 
 puts("PART 1 SOLUTIONS:")
