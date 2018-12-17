@@ -1,66 +1,206 @@
 #!/usr/bin/env ruby
 
-def parse_file(filename)
-  firewall = []
+class Cart
+  attr_accessor :coords
+  attr_accessor :direction
+  attr_accessor :next_intersection_turn
+
+  attr_accessor :id
+  attr_accessor :active
+
+  def initialize(coords, direction)
+    @coords = coords
+    @direction = direction
+    @next_intersection_turn = 'left'
+
+    @active = true
+  end
+
+  def advance()
+    @coords[0] += @direction[0]
+    @coords[1] += @direction[1]
+  end
+
+  def get_next_coords()
+    [@coords[0] + @direction[0], @coords[1] + @direction[1]]
+  end
+
+  def handle_intersection()
+    case @next_intersection_turn
+      when 'left'
+        turn_left()
+        @next_intersection_turn = 'straight'
+      when 'straight'
+        @next_intersection_turn = 'right'
+      when 'right'
+        turn_right()
+        @next_intersection_turn = 'left'
+    end
+  end
+
+  def turn_left()
+    @direction = [@direction[1], -@direction[0]]
+  end
+
+  def turn_right()
+    @direction = [-@direction[1], @direction[0]]
+  end
+end
+
+def get_track_and_carts_from_file(filename)
+  tracks = []
+  carts = []
+
+  y = 0
 
   File.open(filename, "r") do |file|
     file.each_line do |line|
-      parsed_line = line.gsub(/\s+/, '').split(':')
-      firewall[parsed_line[0].to_i] = parsed_line[1].to_i
+      for x in 0...line.length
+        char = line[x]
+
+        tracks[x] ||= []
+
+        if ['<', '>', 'v', '^'].include?(char)
+          direction = []
+          case char
+            when '>'
+              direction = [1, 0]
+              tracks[x][y] = '-'
+            when '<'
+              direction = [-1, 0]
+              tracks[x][y] = '-'
+            when 'v'
+              direction = [0, 1]
+              tracks[x][y] = '|'
+            when '^'
+              direction = [0, -1]
+              tracks[x][y] = '|'
+          end
+
+          carts << Cart.new([x, y], direction)
+          carts[carts.length - 1].id = carts.length - 1
+        else
+          tracks[x][y] = char
+        end
+      end
+
+      y += 1
     end
   end
 
-  # indices not filled in will be nil, which works just fine for our purposes
-  firewall
+  {tracks: tracks, carts: carts}
 end
 
-def will_scanner_catch(range, picosecond)
-  return range == 1 ? true : (picosecond % ((range - 1) * 2) == 0)
+def get_track(tracks, coords)
+  return '' if coords[0] < 0 || coords[0] > tracks.length || coords[1] < 0 || coords[1] > tracks[coords[0]].length
+
+  tracks[coords[0]][coords[1]]
 end
 
-def trip_severity(firewall, start_time, return_if_caught = false)
-  # set this to nil initially because 0 severity means being caught at depth 0
-  for i in 0...firewall.length
-    scanner_range = firewall[i]
+def coords_of_first_crash(tracks, carts)
+  while true
+    carts.each_with_index do |cart, i|
+      cart.advance()
 
-    if scanner_range != nil && will_scanner_catch(scanner_range, i + start_time)
-      severity ||= 0
-      severity += (i * scanner_range)
-      # optimization for part 2
-      return severity if return_if_caught
+      carts.each_with_index do |cart2, i2|
+        next if i == i2
+
+        if cart.coords[0] == cart2.coords[0] && cart.coords[1] == cart2.coords[1]
+          return cart.coords.join(',')
+        end
+      end
+
+      track = get_track(tracks, cart.coords)
+
+      if track == '+'
+        cart.handle_intersection()
+      elsif ['/', '\\'].include?(track)
+        case track
+          when '/'
+            if cart.direction[0] > 0 || cart.direction[0] < 0
+              cart.turn_left()
+            else
+              cart.turn_right()
+            end
+          when '\\'
+            if cart.direction[0] > 0 || cart.direction[0] < 0
+              cart.turn_right()
+            else
+              cart.turn_left()
+            end
+        end
+      end
     end
   end
-
-  severity
 end
 
-def min_delay_for_safe_passage(firewall)
-  delay = 0
+def last_cart_remaining_coords(tracks, carts)
+  seconds = 1
 
   while true
-    break if trip_severity(firewall, delay, true) == nil
-    delay += 1
+    carts.each_with_index do |cart, i|
+      next if !cart.active
+
+      cart.advance()
+
+      carts.each_with_index do |cart2, i2|
+        next if i == i2 || !cart2.active
+
+        if cart.coords[0] == cart2.coords[0] && cart.coords[1] == cart2.coords[1]
+          cart.active = cart2.active = false
+          break
+        end
+      end
+
+      track = get_track(tracks, cart.coords)
+
+      if track == '+'
+        cart.handle_intersection()
+      elsif ['/', '\\'].include?(track)
+        case track
+          when '/'
+            if cart.direction[0] > 0 || cart.direction[0] < 0
+              cart.turn_left()
+            else
+              cart.turn_right()
+            end
+          when '\\'
+            if cart.direction[0] > 0 || cart.direction[0] < 0
+              cart.turn_right()
+            else
+              cart.turn_left()
+            end
+        end
+      end
+    end
+
+    carts.keep_if { |cart| cart.active }
+
+    break if carts.length == 1
+
+    seconds += 1
   end
 
-  delay
+  carts[0].coords.join(',')
 end
 
 def part_1
-  puts("EXAMPLE SOLUTION:")
-  example_input = parse_file("day13_example.txt")
-  puts(trip_severity(example_input, 0))
-  puts("INPUT SOLUTION:")
-  file_input = parse_file("day13_input.txt")
-  puts(trip_severity(file_input, 0))
+  # puts("EXAMPLE SOLUTION:")
+  # example_input = get_track_and_carts_from_file("day13_example.txt")
+  # puts(coords_of_first_crash(example_input[:tracks], example_input[:carts]))
+  # puts("INPUT SOLUTION:")
+  # file_input = get_track_and_carts_from_file("day13_input.txt")
+  # puts(coords_of_first_crash(file_input[:tracks], file_input[:carts]))
 end
 
 def part_2
   puts("EXAMPLE SOLUTION:")
-  example_input = parse_file("day13_example.txt")
-  puts(min_delay_for_safe_passage(example_input))
+  example_input = get_track_and_carts_from_file("day13_example2.txt")
+  puts(last_cart_remaining_coords(example_input[:tracks], example_input[:carts]))
   puts("INPUT SOLUTION:")
-  file_input = parse_file("day13_input.txt")
-  puts(min_delay_for_safe_passage(file_input))
+  file_input = get_track_and_carts_from_file("day13_input.txt")
+  puts(last_cart_remaining_coords(file_input[:tracks], file_input[:carts]))
+  # first answer: 47,135 (X)
 end
 
 puts("PART 1 SOLUTIONS:")
