@@ -138,6 +138,10 @@ def last_cart_remaining_coords(tracks, carts)
   seconds = 1
 
   while true
+    # Here's a fun thing: I skipped over this requirement in the original question, but AoC accepted my result sans-sorting as correct, even though
+    # sorting them actually leads to a different crash location. Needless to say, this caused me quite a bit of frustration :P
+    carts.sort_by! { |c| [c.coords[1], c.coords[0]] }
+
     carts.each_with_index do |cart, i|
       next if !cart.active
 
@@ -185,12 +189,12 @@ def last_cart_remaining_coords(tracks, carts)
 end
 
 def part_1
-  # puts("EXAMPLE SOLUTION:")
-  # example_input = get_track_and_carts_from_file("day13_example.txt")
-  # puts(coords_of_first_crash(example_input[:tracks], example_input[:carts]))
-  # puts("INPUT SOLUTION:")
-  # file_input = get_track_and_carts_from_file("day13_input.txt")
-  # puts(coords_of_first_crash(file_input[:tracks], file_input[:carts]))
+  puts("EXAMPLE SOLUTION:")
+  example_input = get_track_and_carts_from_file("day13_example.txt")
+  puts(coords_of_first_crash(example_input[:tracks], example_input[:carts]))
+  puts("INPUT SOLUTION:")
+  file_input = get_track_and_carts_from_file("day13_input.txt")
+  puts(coords_of_first_crash(file_input[:tracks], file_input[:carts]))
 end
 
 def part_2
@@ -200,7 +204,6 @@ def part_2
   puts("INPUT SOLUTION:")
   file_input = get_track_and_carts_from_file("day13_input.txt")
   puts(last_cart_remaining_coords(file_input[:tracks], file_input[:carts]))
-  # first answer: 47,135 (X)
 end
 
 puts("PART 1 SOLUTIONS:")
