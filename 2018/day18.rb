@@ -1,173 +1,115 @@
 #!/usr/bin/env ruby
 
-class Instruction
-  attr_accessor :operation
-  attr_accessor :lhs
-  attr_accessor :rhs
+def get_area_from_file(filename)
+  area = []
 
-  def initialize(operation, lhs, rhs)
-    @operation = operation
-    @lhs = lhs
-    @rhs = rhs
-  end
-
-  def get_value(sym, registers)
-    if sym != nil
-      if is_register?(sym)
-        registers[sym] ||= 0
-        return registers[sym] || 0
-      else
-        return sym.to_i
-      end
-    end
-
-    nil
-  end
-
-  def get_lhs(registers)
-    get_value(@lhs, registers)
-  end
-
-  def get_rhs(registers)
-    get_value(@rhs, registers)
-  end
-end
-
-def is_register?(sym)
-  sym.match(/[A-z]/) != nil
-end
-
-def parse_file(filename)
-  instructions = []
+  y = 0
 
   File.open(filename, "r") do |file|
     file.each_line do |line|
-      parsed_line = line.split(' ')
-      instructions << Instruction.new(parsed_line[0], parsed_line[1], parsed_line[2])
-    end
+      subbed_line = line.gsub(/\s+/, '')
+      for x in 0...subbed_line.length
+        area[x] ||= []
+        area[x][y] = subbed_line[x]
+      end
 
+      y += 1
+    end
   end
 
-  instructions
+  area
 end
 
-def first_frequency_recovery(instructions)
-  curr_index = 0
-  last_freq = 0
-  registers = {}
+def area_after_num_minutes(area, num_minutes)
+  for min in 0...num_minutes
+    new_area = []
 
-  while true
-    curr_instruction = instructions[curr_index]
-    registers[curr_instruction.lhs] ||= 0 if is_register?(curr_instruction.lhs)
+    for x in 0...area.length
+      new_area[x] ||= []
 
-    rhs = curr_instruction.get_rhs(registers)
+      for y in 0...area[x].length
+        new_area[x][y] = area[x][y]
 
-    case curr_instruction.operation
-    when 'snd'
-      last_freq = curr_instruction.get_lhs(registers)
-    when 'set'
-      registers[curr_instruction.lhs] = rhs
-    when 'add'
-      registers[curr_instruction.lhs] += rhs
-    when 'mul'
-      registers[curr_instruction.lhs] *= rhs
-    when 'mod'
-      registers[curr_instruction.lhs] %= rhs
-    when 'rcv'
-      return last_freq if curr_instruction.get_lhs(registers) > 0
-    when 'jgz'
-      curr_index += rhs - 1 if curr_instruction.get_lhs(registers) > 0
+        x_min = [x - 1, 0].max
+        x_max = [area.length - 1, x + 1].min
+
+        y_min = [y - 1, 0].max
+        y_max = [area[x].length - 1, y + 1].min
+
+        adjacent_counts = {'.' => 0, '|' => 0, '#' => 0}
+        for x_adj in x_min..x_max
+          for y_adj in y_min..y_max
+            next if x_adj == x && y_adj == y
+            adjacent_counts[area[x_adj][y_adj]] += 1
+          end
+        end
+
+        case area[x][y]
+          when '.'
+            new_area[x][y] = '|' if adjacent_counts['|'] >= 3
+          when '|'
+            new_area[x][y] = '#' if adjacent_counts['#'] >= 3
+          when '#'
+            new_area[x][y] = '.' if adjacent_counts['|'] == 0 || adjacent_counts['#'] == 0
+        end
+      end
     end
 
-    curr_index += 1
+    area = new_area
   end
 
-  0
+  area
 end
+
+def get_total_resource_value(area, num_minutes)
+  new_area = area_after_num_minutes(area, num_minutes)
+  num_trees = 0
+  num_lumberyards = 0
+
+  for x in 0...new_area.length
+    for y in 0...new_area[x].length
+      num_trees += 1 if new_area[x][y] == '|'
+      num_lumberyards += 1 if new_area[x][y] == '#'
+    end
+  end
+
+  # puts "num_trees = #{num_trees}, num_lumberyards = #{num_lumberyards} => value = #{num_trees * num_lumberyards}"
+  num_trees * num_lumberyards
+end
+
+def get_resources(area, num_minutes)
+  new_area = area_after_num_minutes(area, num_minutes)
+  num_trees = 0
+  num_lumberyards = 0
+
+  for x in 0...new_area.length
+    for y in 0...new_area[x].length
+      num_trees += 1 if new_area[x][y] == '|'
+      num_lumberyards += 1 if new_area[x][y] == '#'
+    end
+  end
+
+  # puts "num_trees = #{num_trees}, num_lumberyards = #{num_lumberyards} => value = #{num_trees * num_lumberyards}"
+  {num_trees: num_trees, num_lumberyards: num_lumberyards, value: num_trees * num_lumberyards}
+end
+
 
 def part_1
   puts("EXAMPLE SOLUTION:")
-  example_input = parse_file("day18_example.txt")
-  puts(first_frequency_recovery(example_input))
+  example_input = get_area_from_file("day18_example.txt")
+  puts(get_total_resource_value(example_input, 10))
+
   puts("INPUT SOLUTION:")
-  file_input = parse_file("day18_input.txt")
-  puts(first_frequency_recovery(file_input))
+  file_input = get_area_from_file("day18_input.txt")
+  puts(get_total_resource_value(file_input, 10))
 end
 
-class Program
-  attr_accessor :registers
-  attr_accessor :message_queue
-  attr_accessor :curr_index
-  attr_accessor :send_count
-  attr_accessor :is_waiting
-  attr_accessor :proc_pointer
-
-  def initialize(pid)
-    @registers = {'p' => pid}
-    @message_queue = []
-    @curr_index = 0
-    @send_count = 0
-  end
-
-  def is_running(instructions)
-    !@is_waiting && @curr_index < instructions.length
-  end
-
-  def process_current_instruction(instructions)
-    instruction = instructions[@curr_index]
-    @registers[instruction.lhs] ||= 0 if is_register?(instruction.lhs)
-
-    rhs = instruction.get_rhs(@registers)
-
-    case instruction.operation
-    when 'snd'
-      @send_count += 1
-      proc_pointer.message_queue << instruction.get_lhs(@registers)
-    when 'set'
-      @registers[instruction.lhs] = rhs
-    when 'add'
-      @registers[instruction.lhs] += rhs
-    when 'mul'
-      @registers[instruction.lhs] *= rhs
-    when 'mod'
-      @registers[instruction.lhs] %= rhs
-    when 'rcv'
-      if message_queue.length == 0
-        @is_waiting = true
-        return
-      end
-
-      @registers[instruction.lhs] = @message_queue.shift
-    when 'jgz'
-      @curr_index += rhs - 1 if instruction.get_lhs(@registers) > 0
-    end
-
-    @curr_index += 1
-  end
-end
-
-def program_sends_before_termination(instructions)
-  proc_0 = Program.new(0)
-  proc_1 = Program.new(1)
-
-  proc_0.proc_pointer = proc_1
-  proc_1.proc_pointer = proc_0
-
-  while proc_0.is_running(instructions) || proc_1.is_running(instructions)
-    proc_0.process_current_instruction(instructions)
-    proc_1.process_current_instruction(instructions)
-  end
-
-  proc_1.send_count
-end
 
 def part_2
-  puts("EXAMPLE SOLUTION:")
-  example_input = parse_file("day18_example2.txt")
-  puts(program_sends_before_termination(example_input))
   puts("INPUT SOLUTION:")
-  file_input = parse_file("day18_input.txt")
-  puts(program_sends_before_termination(file_input))
+  # This one was another "mathy" solution. The pattern eventually starts oscillating around 478 and has a "wavelength" of 28.
+  # Used that to determine that it's the same as the value at 524 minutes: 176782
+  puts "176782"
 end
 
 puts("PART 1 SOLUTIONS:")
