@@ -67,5 +67,4 @@ end
 
 part_1_examples()
 part_1_final()
-# part_2_examples()
 part_2_final()
