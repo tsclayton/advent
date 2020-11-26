@@ -150,36 +150,145 @@ class Executor
   end
 end
 
-def run_program(program, inputs)
-  executor = Executor.new(program, inputs)
-  outputs = []
+class Painter
+  attr_accessor :direction
+  attr_accessor :current_position
+  attr_accessor :map
+  attr_accessor :executor
 
-  while !executor.is_finished
-    outputs << executor.run_program()
+  def initialize(executor)
+    @direction = [0,1]
+    @current_position = [0,0]
+    @map = {}
+    @executor = executor
   end
 
-  outputs.compact.join(",")
+  def turn_left()
+    @direction = [@direction[1], -@direction[0]]
+  end
+
+  def turn_right()
+    @direction = [-@direction[1], @direction[0]]
+  end
+
+  def advance()
+    @current_position[0] += @direction[0]
+    @current_position[1] += @direction[1]
+  end
+
+  def paint(x, y, colour)
+    @map[[x,y]] = colour
+  end
+
+  def current_colour()
+    if @map[@current_position].nil?
+      return "."
+    end
+
+    @map[@current_position]
+  end
+
+  def panels_painted()
+    num_painted = 0
+
+    @map.each do |coords, colour|
+      num_painted += 1
+    end
+
+    num_painted
+  end
+
+  def step()
+    input = 0
+    curr_colour = current_colour
+    if (curr_colour == '#')
+      input = 1
+    end
+
+    executor.add_input(input)
+    colour_output = executor.run_program()
+
+    if !colour_output.nil?
+      paint_colour = '.'
+      if colour_output == 0
+        paint_colour = '.'
+      elsif colour_output == 1
+        paint_colour = '#'
+      end
+
+      @map[[@current_position[0], @current_position[1]]] = paint_colour
+
+      direction_output = executor.run_program()
+
+      if !direction_output.nil?
+        if direction_output == 0
+          turn_left()
+        elsif direction_output == 1
+          turn_right()
+        end
+
+        advance()
+      end
+    end
+  end
+
+  def run_program()
+    while !executor.is_finished
+      step()
+    end
+  end
+
+  def print_map
+    min_x = 0
+    min_y = 0
+    max_x = 0
+    max_y = 0
+
+    @map.each do |coords, colour|
+      min_x = coords[0] if coords[0] < min_x
+      min_y = coords[1] if coords[1] < min_y
+      max_x = coords[0] if coords[0] > max_x
+      max_y = coords[1] if coords[1] > max_y
+    end
+
+    # pattern is flipped in both directions for whatever reason
+    for y in (min_y..max_y).to_a.reverse
+      line = ''
+      for x in (min_x..max_x).to_a.reverse
+        char = @map[[x,y]] || '.'
+        line << char
+      end
+      puts line
+    end
+  end
 end
 
-def part_1_examples
-  puts("PART 1 EXAMPLE SOLUTIONS:")
-  puts(run_program([109,1,204,-1,1001,100,1,100,1008,100,16,101,1006,101,0,99], []))
-  puts(run_program([1102,34915192,34915192,7,4,7,99,0], []))
-  puts(run_program([104,1125899906842624,99], []))
+def num_panels_painted(program)
+  executor = Executor.new(program, [])
+  painter = Painter.new(executor)
+  painter.run_program()
+  painter.panels_painted()
+end
+
+def get_registration(program)
+  executor = Executor.new(program, [])
+  painter = Painter.new(executor)
+  painter.map[[0,0]] = '#'
+  painter.run_program()
+  painter.print_map()
 end
 
 def part_1_final
   puts("PART 1 FINAL SOLUTION:")
-  file_input = get_program_from_file("day9_input.txt")
-  puts(run_program(file_input, [1]))
+  file_input = get_program_from_file("day11_input.txt")
+  puts(num_panels_painted(file_input))
 end
 
 def part_2_final
   puts("PART 2 FINAL SOLUTION:")
-  file_input = get_program_from_file("day9_input.txt")
-  puts(run_program(file_input, [2]))
+  file_input = get_program_from_file("day11_input.txt")
+  get_registration(file_input)
 end
 
-part_1_examples()
 part_1_final()
 part_2_final()
