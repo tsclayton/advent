@@ -158,7 +158,7 @@ def part_1_final
 end
 
 def part_2_examples
-  puts("PART 1 EXAMPLE SOLUTION:")
+  puts("PART 2 EXAMPLE SOLUTIONS:")
   moons = [
     Moon.new([-1, 0, 2], 0),
     Moon.new([2, -10, -7], 1),
@@ -177,7 +177,7 @@ def part_2_examples
 end
 
 def part_2_final
-  puts("PART 1 FINAL SOLUTION:")
+  puts("PART 2 FINAL SOLUTION:")
   moons = [
     Moon.new([16, -11, 2], 0),
     Moon.new([0, -4, 7], 1),
