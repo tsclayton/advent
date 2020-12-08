@@ -94,7 +94,6 @@ end
 
 def part_2_final
   puts("PART 2 FINAL SOLUTION:")
-  #1240 too low
   puts(num_valid_passwords_part_2(128392, 643281))
 end
 
