@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 
 def get_joltage_ratings_from_file(filename)
-  joltages = File.read(filename).split("\n").map(&:to_i)
+  File.read(filename).split("\n").map(&:to_i)
 end
 
 def device_adaptor_rating(joltage_ratings)
@@ -77,7 +77,6 @@ def part_2_examples
   joltage_ratings = [16, 10, 15, 5, 1, 11, 7, 19, 6, 12, 4]
   puts(total_combinations(joltage_ratings))
 
-  # 19208 =  2 * 2  * 3 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 3 
   joltage_ratings = [28, 33, 18, 42, 31, 14, 46, 20, 48, 47, 24, 23, 49, 45, 19, 38, 39, 11, 1, 32, 25, 35, 8, 17, 7, 9, 4, 2, 34, 10, 3]
   puts(total_combinations(joltage_ratings))
 end
