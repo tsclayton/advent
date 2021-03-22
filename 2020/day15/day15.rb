@@ -1,23 +1,23 @@
 #!/usr/bin/env ruby
 
-def memory_game(initial_numbers, turns)
+def memory_game(numbers, turns)
   last_turn_spoken = {}
 
   for i in 0...(turns - 1)
-    if i < initial_numbers.length - 1
-      last_turn_spoken[initial_numbers[i]] = i
+    if i < numbers.length - 1
+      last_turn_spoken[numbers[i]] = i
     else
-      current_number = initial_numbers[-1]
+      current_number = numbers[-1]
       next_number = 0
       if !last_turn_spoken[current_number].nil?
         next_number = i - last_turn_spoken[current_number]
       end
-      initial_numbers << next_number
+      numbers << next_number
       last_turn_spoken[current_number] = i
     end
   end
 
-  initial_numbers[-1]
+  numbers[-1]
 end
 
 def part_1_examples
