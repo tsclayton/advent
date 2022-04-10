@@ -1,120 +1,134 @@
 #!/usr/bin/env ruby
 
-class Instruction
-  attr_accessor :operation
-  attr_accessor :lhs
-  attr_accessor :rhs
+class Bot
+  attr_accessor :pos
+  attr_accessor :radius
 
-  def initialize(operation, lhs, rhs)
-    @operation = operation
-    @lhs = lhs
-    @rhs = rhs
+  def initialize(pos, radius)
+    @pos = pos
+    @radius = radius
   end
 
-  def get_value(sym, registers)
-    if sym != nil
-      if is_register?(sym)
-        registers[sym] ||= 0
-        return registers[sym] || 0
-      else
-        return sym.to_i
-      end
+  def distance(bot2)
+    (pos[0] - bot2.pos[0]).abs + (pos[1] - bot2.pos[1]).abs + (pos[2] - bot2.pos[2]).abs
+  end
+
+  def intersects(bot2)
+    distance(bot2) <= (radius + bot2.radius)
+  end
+
+  def is_in_range(bot2)
+    distance(bot2) <= radius
+  end
+end
+
+def get_bots_from_file(filename)
+  bots = []
+
+  File.read(filename).split("\n").each do |line|
+    numbers = line.scan(/-?[0-9]+/).map(&:to_i)
+    bots << Bot.new([numbers[0], numbers[1], numbers[2]], numbers[3])
+  end
+
+  bots
+end
+
+def get_strongest_bot(bots)
+  strongest_bot = nil
+
+  bots.each do |bot|
+    strongest_bot = bot if strongest_bot.nil? || strongest_bot.radius < bot.radius
+  end
+
+  strongest_bot
+end
+
+def bots_in_strongest_radius(bots)
+  strongest_bot = get_strongest_bot(bots)
+
+  bot_count = 0
+
+  bots.each do |bot|
+    bot_count += 1 if strongest_bot.is_in_range(bot)
+  end
+
+  bot_count
+end
+
+def most_saturated_distance(bots)
+  bot_buddies = {}
+
+  for i in 0...bots.length
+    bot_buddies[i] = []
+
+    for j in 0...bots.length
+      next if i == j
+
+      bot_buddies[i] << j if bots[i].intersects(bots[j])
     end
 
-    nil
+    bot_buddies[i].sort
   end
 
-  def get_lhs(registers)
-    get_value(@lhs, registers)
-  end
+  largest_collision_group = []
+  bot_buddies.each do |bot, buddies|
+    collision_group = bot_buddies[bot] + [bot]
 
-  def get_rhs(registers)
-    get_value(@rhs, registers)
-  end
-end
-
-def is_register?(sym)
-  sym.match(/[A-z]/) != nil
-end
-
-def parse_file(filename)
-  instructions = []
-
-  File.open(filename, "r") do |file|
-    file.each_line do |line|
-      parsed_line = line.split(' ')
-      instructions << Instruction.new(parsed_line[0], parsed_line[1], parsed_line[2])
+    buddies.each do |buddy|
+      collision_group = collision_group & (bot_buddies[buddy] + [buddy])
+      break if collision_group.length < largest_collision_group.length
     end
 
-  end
-
-  instructions
-end
-
-def run_instructions(instructions, registers = {})
-  curr_index = 0
-  num_muls = 0
-
-  while true
-    break if curr_index >= instructions.length
-    curr_instruction = instructions[curr_index]
-
-    registers[curr_instruction.lhs] ||= 0 if is_register?(curr_instruction.lhs)
-
-    rhs = curr_instruction.get_rhs(registers)
-
-    case curr_instruction.operation
-    when 'set'
-      registers[curr_instruction.lhs] = rhs
-    when 'sub'
-      registers[curr_instruction.lhs] -= rhs
-    when 'mul'
-      num_muls += 1
-      registers[curr_instruction.lhs] *= rhs
-    when 'mod'
-      registers[curr_instruction.lhs] %= rhs
-    when 'jnz'
-      curr_index += rhs - 1 if curr_instruction.get_lhs(registers) != 0
+    if collision_group.length > largest_collision_group.length
+      largest_collision_group = collision_group
     end
-
-    curr_index += 1
   end
 
-  {num_muls: num_muls, value_of_h: registers['h']}
+  largest_collision_group.map { |b| bots[b].pos.map(&:abs).sum - bots[b].radius }.max
 end
 
-def part_1
-  puts("INPUT SOLUTION:")
-  file_input = parse_file("day23_input.txt")
-  puts(run_instructions(file_input)[:num_muls])
+def part_1_example
+  puts("PART 1 EXAMPLE SOLUTION:")
+  bots = [
+    Bot.new([0, 0, 0], 4),
+    Bot.new([1, 0, 0], 1),
+    Bot.new([4, 0, 0], 3),
+    Bot.new([0, 2, 0], 1),
+    Bot.new([0, 5, 0], 3),
+    Bot.new([0, 0, 3], 1),
+    Bot.new([1, 1, 1], 1),
+    Bot.new([1, 1, 2], 1),
+    Bot.new([1, 3, 1], 1)
+  ]
+  puts(bots_in_strongest_radius(bots))
 end
 
-def optimized_input_program()
-  non_primes = 0
-
-  lower_bound = 109300
-  upper_bound = 126300
-
-  while lower_bound <= upper_bound
-    for factor_one in 2..(lower_bound / 2)
-      if (lower_bound % factor_one == 0)
-        non_primes += 1
-        break
-      end
-    end
-
-    lower_bound += 17
-  end
-
-  non_primes
+def part_1_final
+  puts("PART 1 FINAL SOLUTION:")
+  bots = get_bots_from_file('day23_input.txt')
+  puts(bots_in_strongest_radius(bots))
 end
 
-def part_2
-  puts("INPUT SOLUTION:")
-  puts(optimized_input_program())
+def part_2_example
+  puts("PART 2 EXAMPLE SOLUTION:")
+  bots = [
+    Bot.new([10,12,12], 2),
+    Bot.new([12,14,12], 2),
+    Bot.new([16,12,12], 4),
+    Bot.new([14,14,14], 6),
+    Bot.new([50,50,50], 200),
+    Bot.new([10,10,10], 5)
+  ]
+  puts(most_saturated_distance(bots))
 end
 
-puts("PART 1 SOLUTIONS:")
-part_1()
-puts("PART 2 SOLUTIONS:")
-part_2()
+def part_2_final
+  puts("PART 2 FINAL SOLUTION:")
+  bots = get_bots_from_file('day23_input.txt')
+  puts(most_saturated_distance(bots))
+end
+
+part_1_example()
+part_1_final()
+part_2_example()
+part_2_final()

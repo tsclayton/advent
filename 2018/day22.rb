@@ -1,147 +1,167 @@
 #!/usr/bin/env ruby
 
-def parse_file(filename)
-  grid = []
+def get_erosion(pos, depth, target, cache)
+  (get_geologic_index(pos, depth, target, cache) + depth) % 20183
+end
 
-  File.open(filename, "r") do |file|
-    file.each_line do |line|
-      grid << line.gsub(/\s+/, '').split('').map {|char| char == '#'}
+def get_geologic_index(pos, depth, target, cache)
+  return cache[pos] if !cache[pos].nil?
+
+  geologic_index = 0
+  if pos == [0, 0] || pos == target
+    geologic_index = 0
+  elsif pos[1] == 0
+    geologic_index = pos[0] * 16807
+  elsif pos[0] == 0
+    geologic_index = pos[1] * 48271
+  else
+    geologic_index = get_erosion([pos[0] - 1, pos[1]], depth, target, cache) * get_erosion([pos[0], pos[1] - 1], depth, target, cache)
+  end
+
+  cache[pos] = geologic_index
+  geologic_index
+end
+
+def get_type(pos, depth, target, cache)
+  ['.', '=', '|'][get_erosion(pos, depth, target, cache) % 3]
+end
+
+def get_total_risk_level(depth, target)
+  total_risk_level = 0
+  cache = {}
+
+  for y in 0..target[1]
+    for x in 0..target[0]
+      total_risk_level += (get_erosion([x, y], depth, target, cache) % 3)
     end
   end
 
-  grid
+  total_risk_level
 end
 
-module States
-  Cleaned = 'C'
-  Weakened = 'W'
-  Infected = 'I'
-  Flagged = 'F'
-end
+def generate_map(depth, target)
+  map = []
+  cache = {}
 
-def make_infinite_hash_grid(grid)
-  hash_grid = {}
-
-  centre_row = (grid.length / 2)
-  centre_col = (grid[0].length / 2)
-
-  for row in 0...grid.length
-    for col in 0...grid[row].length
-      # Set centre of grid to 0,0
-      # Also swap it so that coords are represented as x,y with positive y being up (for convenience)
-      state = grid[row][col] ? States::Infected : States::Cleaned
-      hash_grid[[col - centre_col, (grid.length - 1 - row) - centre_row]] = state
-    end
-  end
-
-  hash_grid
-end
-
-class Carrier
-  attr_accessor :direction
-  attr_accessor :curr_position
-  attr_accessor :infecting_bursts
-  attr_accessor :is_v2
-
-  def initialize(is_v2 = false)
-    @is_v2 = is_v2
-    @direction = [0,1]
-    @curr_position = [0,0]
-    @infecting_bursts = 0
-  end
-
-  def move_forward()
-    @curr_position = [@curr_position[0] + @direction[0], @curr_position[1] + @direction[1]]
-  end
-
-  def turn_right()
-    @direction = [@direction[1], -@direction[0]]
-  end
-
-  def turn_left
-    @direction = [-@direction[1], @direction[0]]
-  end
-
-  def burst(hash_grid)
-    if @is_v2
-      hash_grid[@curr_position] ||= States::Cleaned
-
-      case hash_grid[@curr_position]
-      when States::Infected
-        turn_right()
-        hash_grid[@curr_position] = States::Flagged
-      when States::Weakened
-        hash_grid[@curr_position] = States::Infected
-        @infecting_bursts += 1
-      when States::Flagged
-        turn_left()
-        turn_left()
-        hash_grid[@curr_position] = States::Cleaned
+  for y in 0..target[1]
+    row = ''
+    for x in 0..target[0]
+      type = get_type([x, y], depth, target, cache)
+      if [x, y] == [0, 0]
+        row += 'M'
+      elsif [x, y] == target
+        row += 'T'
       else
-        turn_left()
-        hash_grid[@curr_position] = States::Weakened
+        row += type
+      end
+    end
+    map << row
+  end
+
+  map
+end
+
+def get_next_positions(pos, target)
+  positions = []
+
+  [[0, 1], [1, 0], [-1, 0], [0, -1]].each do |direction|
+    adjacent_space = [pos[0] + direction[0], pos[1] + direction[1]]
+    positions << adjacent_space if adjacent_space[0] >= 0 && adjacent_space[1] >= 0
+  end
+
+  positions.sort_by {|pos| (pos[0] - target[0]).abs + (pos[1] - target[1]).abs}
+end
+
+def type_supports_tools(type, tools)
+  case type
+  when '.'
+    return (tools[:torch] && !tools[:gear]) || (!tools[:torch] && tools[:gear])
+  when '='
+    return (!tools[:torch] && tools[:gear]) || (!tools[:torch] && !tools[:gear])
+  when '|'
+    return (tools[:torch] && !tools[:gear]) || (!tools[:torch] && !tools[:gear])
+  end
+
+  false
+end
+
+def get_quickest_path(depth, target)
+  map_cache = {}
+  path_cache = {}
+
+  queue_queue = [[{pos: [0, 0], tools: {torch: true, gear: false}}]]
+  total_steps = 0
+
+  while !queue_queue.empty?
+    queue = queue_queue.shift
+    queue ||= []
+
+    while !queue.empty?
+      state = queue.shift
+
+      next if !path_cache[state].nil?
+      path_cache[state] = total_steps
+
+      if state[:pos] == target
+        return total_steps if state[:tools][:torch]
+          
+        queue_queue[6] ||= []
+        queue_queue[6].unshift({pos: state[:pos], tools: {torch: true, gear: false}})
+        next
       end
 
-      move_forward()
-    else
-      hash_grid[@curr_position] ||= States::Cleaned
+      current_type = get_type(state[:pos], depth, target, map_cache)
 
-      if hash_grid[@curr_position] == States::Infected
-        turn_right()
-        hash_grid[@curr_position] = States::Cleaned
-      else
-        turn_left()
-        hash_grid[@curr_position] = States::Infected
-        @infecting_bursts += 1
+      get_next_positions(state[:pos], target).each do |next_pos|
+        step_cost = 1
+
+        next_tools = state[:tools]
+        next_type = get_type(next_pos, depth, target, map_cache)
+        if current_type != next_type && !type_supports_tools(next_type, state[:tools])
+          case next_type
+          when '.'
+            next_tools = (current_type == '=' ? {torch: false, gear: true} : {torch: true, gear: false})
+          when '='
+            next_tools = (current_type == '.' ? {torch: false, gear: true} : {torch: false, gear: false})
+          when '|'
+            next_tools = (current_type == '.' ? {torch: true, gear: false} : {torch: false, gear: false})
+          end
+          step_cost += 7
+        end
+
+        queue_queue[step_cost - 1] ||= []
+        queue_queue[step_cost - 1] << {pos: next_pos, tools: next_tools}
       end
-
-      move_forward()
     end
-  end
-end
 
-def num_infecting_bursts(grid, num_bursts, is_v2 = false)
-  hash_grid = make_infinite_hash_grid(grid)
-
-  carrier = Carrier.new(is_v2)
-
-  for i in 0...num_bursts
-    carrier.burst(hash_grid)
+    total_steps += 1
   end
 
-  carrier.infecting_bursts
+  -1
 end
 
-def part_1
-  puts("EXAMPLE SOLUTIONS:")
-  grid = [
-    [false, false, true],
-    [true, false, false],
-    [false, false, false]
-  ]
-  puts(num_infecting_bursts(grid, 7))
-  puts(num_infecting_bursts(grid, 70))
-  puts(num_infecting_bursts(grid, 10_000))
-  puts("INPUT SOLUTION:")
-  file_input = parse_file("day22_input.txt")
-  puts(num_infecting_bursts(file_input, 10_000))
+def part_1_example()
+  puts("PART 1 EXAMPLE SOLUTION:")
+  puts(generate_map(510, [10, 10]))
+  puts(get_total_risk_level(510, [10, 10]))
 end
 
-def part_2
-  puts("EXAMPLE SOLUTIONS:")
-  grid = [
-    [false, false, true],
-    [true, false, false],
-    [false, false, false]
-  ]
-  puts(num_infecting_bursts(grid, 100, true))
-  puts(num_infecting_bursts(grid, 10_000_000, true))
-  puts("INPUT SOLUTION:")
-  file_input = parse_file("day22_input.txt")
-  puts(num_infecting_bursts(file_input, 10_000_000, true))
+def part_1_final()
+  puts("PART 1 FINAL SOLUTION:")
+  puts(get_total_risk_level(11739, [11, 718]))
 end
 
-puts("PART 1 SOLUTIONS:")
-part_1()
-puts("PART 2 SOLUTIONS:")
-part_2()
+def part_2_example()
+  puts("PART 2 EXAMPLE SOLUTION:")
+  puts(get_quickest_path(510, [10, 10]))
+end
+
+def part_2_final()
+  puts("PART 2 FINAL SOLUTION:")
+  puts(get_quickest_path(11739, [11, 718]))
+end
+
+part_1_example()
+part_1_final()
+part_2_example()
+part_2_final()
